@@ -2,55 +2,93 @@ import json
 import csv
 import os
 import logging
+from datetime import datetime
 
-def setup_logging():
-    os.makedirs("logs", exist_ok=True)
-    logging.basicConfig(
-        filename="logs/process.log",
-        level=logging.WARNING,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
+# Function to get a timestamp for unique filenames
+def get_timestamp():
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
+# Setup paths with timestamp
+def get_output_file_name():
+    timestamp = get_timestamp()
+    return f"output/updated_{timestamp}.json"
+
+def get_log_file_name():
+    timestamp = get_timestamp()
+    return f"logs/process_{timestamp}.log"
+
+# Load the JSON file
 def load_json(json_path):
-    with open(json_path, "r", encoding="utf-8") as file:
-        return json.load(file)
+    try:
+        with open(json_path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        logging.error(f"File {json_path} not found.")
+        raise
 
+# Load the CSV file
 def load_csv(csv_path):
-    server_to_cloud = {}
-    with open(csv_path, "r", encoding="utf-8") as file:
-        reader = csv.reader(file)
-        next(reader)  # Skip header row
-        for row in reader:
-            if len(row) >= 3:
-                _, server_id, cloud_id = row
-                server_to_cloud[server_id] = cloud_id
-    return server_to_cloud
+    csv_data = {}
+    try:
+        with open(csv_path, mode="r", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if row['serverId']:
+                    csv_data[row['serverId']] = row['cloudId']
+        return csv_data
+    except FileNotFoundError:
+        logging.error(f"File {csv_path} not found.")
+        raise
 
-def update_json(json_data, server_to_cloud):
-    for key, records in json_data.items():
-        for record in records:
-            server_id = record.get("serverId", "")
-            cloud_id = record.get("cloudId", "")
+# Process the JSON data
+def process_json(json_data, csv_data):
+    updated_json = {}
+    for key, value in json_data.items():
+        updated_value = []
+        for record in value:
+            server_id = record.get("serverId")
+            cloud_id = record.get("cloudId")
             
-            if cloud_id:  # Already has a cloudId
-                logging.warning(f"Record of serverId '{server_id}' already contains the associated cloudId '{cloud_id}'.")
-            elif server_id in server_to_cloud:
-                record["cloudId"] = server_to_cloud[server_id]
+            if cloud_id:  # Skip if already filled
+                logging.warning(f"WARNING: Record of serverId '{server_id}' already contains the associated cloudId '{cloud_id}'.")
+                updated_value.append(record)
+            elif server_id and server_id in csv_data:  # Look up serverId in CSV
+                record["cloudId"] = csv_data[server_id]
+                updated_value.append(record)
+                logging.info(f"CloudId for serverId '{server_id}' filled from CSV.")
             else:
-                logging.warning(f"Record of serverId '{server_id}' could not be found in the provided CSV.")
-    return json_data
+                updated_value.append(record)
+                logging.warning(f"WARNING: Record of serverId '{server_id}' could not be found in the provided CSV.")
+        updated_json[key] = updated_value
+    return updated_json
 
-def save_json(json_data, output_path):
-    os.makedirs("output", exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(json_data, file, indent=4)
+# Save the updated JSON data to a new file
+def save_json(data, output_file):
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+    logging.info(f"Updated JSON saved to {output_file}")
 
+# Log the process
+def log_process(updated_json):
+    logging.info("Process completed successfully.")
+    # Additional logging could be added based on conditions in the future
+
+# Main function
 def main(json_file, csv_file, output_file):
-    setup_logging()
     json_data = load_json(json_file)
-    server_to_cloud = load_csv(csv_file)
-    updated_json = update_json(json_data, server_to_cloud)
+    csv_data = load_csv(csv_file)
+    updated_json = process_json(json_data, csv_data)
     save_json(updated_json, output_file)
+    log_process(updated_json)
 
 if __name__ == "__main__":
-    main("input/input.json", "input/input.csv", "output/updated.json")
+    json_file = "input/input.json"
+    csv_file = "input/input.csv"
+    output_file = get_output_file_name()  # Dynamic output file with timestamp
+    log_file = get_log_file_name()  # Dynamic log file with timestamp
+    
+    # Configure logging
+    logging.basicConfig(filename=log_file, level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    main(json_file, csv_file, output_file)
