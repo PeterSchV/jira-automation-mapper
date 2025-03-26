@@ -1,0 +1,4 @@
+entityType,serverId,cloudId
+jira/classic:project,11111,10101
+jira/classic:project,22222,20202
+jira/classic:project,44444,40404
