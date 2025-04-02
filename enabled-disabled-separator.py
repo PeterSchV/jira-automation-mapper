@@ -24,4 +24,4 @@ def split_jira_rules(input_file, enabled_output, disabled_output):
     print(f"Split completed: {len(enabled_rules)} enabled rules, {len(disabled_rules)} disabled rules.")
 
 # Example usage
-split_jira_rules('automation-rules-202504012026.json', 'separator-output/enabled_rules.json', 'separator-output/disabled_rules.json')
+split_jira_rules('fixed20250401.json', 'separator-output/enabled_rules.json', 'separator-output/disabled_rules.json')
